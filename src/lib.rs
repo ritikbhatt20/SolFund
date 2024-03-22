@@ -1,33 +1,57 @@
-use anchor_lang::prelude::*;
+use anchor_lang::{
+    prelude::*,
+    solana_program::{clock::Clock, hash::hash, program::invoke, system_instruction::transfer},
+};
 
-// This is your program's public key and it will update
-// automatically when you build the project.
-declare_id!("11111111111111111111111111111111");
+mod constants;
+
+use crate::{constants::*};
+
+declare_id!("2NNwECQ3bRpSUM9BSojyuUzsfZ2yddNQ3mGq7Nd2Z8Aa");
 
 #[program]
-mod hello_anchor {
+mod crowdfunding {
     use super::*;
-    pub fn initialize(ctx: Context<Initialize>, data: u64) -> Result<()> {
-        ctx.accounts.new_account.data = data;
-        msg!("Changed data to: {}!", data); // Message will show up in the tx logs
+
+    pub fn initialize_project(ctx: Context<InitializeProject>, funding_goal: u64, deadline: i64,) -> Result<()> {
+
+        let project = &mut ctx.accounts.project;
+
+        project.owner = ctx.accounts.owner.key();
+        project.funding_goal = funding_goal;
+        project.deadline = deadline;
+
+        msg!("Owner: {}", project.owner);
+        msg!("Funding Goal: {}", project.funding_goal);
+        msg!("Project Deadline: {}", project.deadline);
+
         Ok(())
     }
 }
 
 #[derive(Accounts)]
-pub struct Initialize<'info> {
-    // We must specify the space in order to initialize an account.
-    // First 8 bytes are default account discriminator,
-    // next 8 bytes come from NewAccount.data being type u64.
-    // (u64 = 64 bits unsigned integer = 8 bytes)
-    #[account(init, payer = signer, space = 8 + 8)]
-    pub new_account: Account<'info, NewAccount>,
+pub struct InitializeProject<'info> {
+    #[account(
+        init,
+        payer = owner,
+        space = 1000,
+        seeds = [PROJECT_SEED.as_bytes()],
+        bump,
+    )]
+    pub project: Account<'info, Project>,
+
     #[account(mut)]
-    pub signer: Signer<'info>,
+    pub owner: Signer<'info>,
+    
     pub system_program: Program<'info, System>,
 }
 
 #[account]
-pub struct NewAccount {
-    data: u64
+pub struct Project {
+    pub owner: Pubkey,
+    pub funding_goal: u64,
+    pub deadline: i64, // Unix timestamp
+    pub total_funded: u64,
 }
+
+
