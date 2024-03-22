@@ -53,6 +53,36 @@ mod crowdfunding {
 
         Ok(())
     }
+
+    pub fn claim_funds(ctx: Context<ClaimFunds>) -> Result<()> {
+
+        let project = &mut ctx.accounts.project;
+
+        let claimer = &ctx.accounts.owner;
+
+        // Ensure the project owner is the signer
+        if ctx.accounts.owner.key() != project.owner {
+        return err!(ProjectError::UnauthorizedToClaim)
+        }
+
+        // Ensure the funding goal has been reached
+        if project.total_funded < project.funding_goal {
+            return err!(ProjectError::FundingGoalNotReached)
+        }
+
+        // Ensure the deadline has passed
+        // let current_timestamp = Clock::get()?.unix_timestamp;
+        // if current_timestamp < project.deadline {
+        //     return Err(ErrorCode::DeadlineNotPassed.into());
+        // }
+
+        **project.to_account_info().try_borrow_mut_lamports()? -= project.total_funded;
+        **claimer.to_account_info().try_borrow_mut_lamports()? += project.total_funded;
+
+        project.claimed_fund = true;
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -93,5 +123,20 @@ pub struct Contribute<'info> {
     )]
     pub project: Account<'info, Project>,
     
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct ClaimFunds<'info> {
+    #[account(
+        mut,
+        seeds = [PROJECT_SEED.as_bytes()],
+        bump
+    )]
+    pub project: Account<'info, Project>,
+
+    #[account(mut)]
+    pub owner: Signer<'info>,
+
     pub system_program: Program<'info, System>,
 }
