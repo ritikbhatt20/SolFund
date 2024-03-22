@@ -1,0 +1,1 @@
+pub const PROJECT_SEED: &str = "project";
