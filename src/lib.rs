@@ -4,8 +4,9 @@ use anchor_lang::{
 };
 
 mod constants;
+mod errors;
 
-use crate::{constants::*};
+use crate::{constants::*, errors::*};
 
 declare_id!("2NNwECQ3bRpSUM9BSojyuUzsfZ2yddNQ3mGq7Nd2Z8Aa");
 
@@ -14,7 +15,7 @@ mod crowdfunding {
     use super::*;
 
     pub fn initialize_project(ctx: Context<InitializeProject>, funding_goal: u64, deadline: i64,) -> Result<()> {
-
+                                            
         let project = &mut ctx.accounts.project;
 
         project.owner = ctx.accounts.owner.key();
@@ -27,6 +28,31 @@ mod crowdfunding {
 
         Ok(())
     }
+
+    pub fn contribute(ctx: Context<Contribute>, amount: u64) -> Result<()> {
+        // Ensure the project is not claimed yet
+        let project = &mut ctx.accounts.project;
+
+        // Ensure the project is not claimed yet
+        if project.claimed_fund {
+            return err!(ProjectError::FundsAlreadyClaimed)
+        }
+
+        // Transfer SOL from contributor to project account
+        invoke(
+            &transfer(&ctx.accounts.contributor.key(), &project.key(), amount),
+            &[
+                ctx.accounts.contributor.to_account_info(),
+                project.to_account_info(),
+                ctx.accounts.system_program.to_account_info()
+            ],
+        )?;
+
+        // Update total funded amount in project account
+        project.total_funded += amount;
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -34,7 +60,7 @@ pub struct InitializeProject<'info> {
     #[account(
         init,
         payer = owner,
-        space = 1000,
+        space = 32 + 8 + 8 + 8 + 1 + 8,
         seeds = [PROJECT_SEED.as_bytes()],
         bump,
     )]
@@ -52,6 +78,20 @@ pub struct Project {
     pub funding_goal: u64,
     pub deadline: i64, // Unix timestamp
     pub total_funded: u64,
+    pub claimed_fund: bool,
 }
 
+#[derive(Accounts)]
+pub struct Contribute<'info> {
+    #[account(mut)]
+    pub contributor: Signer<'info>,
 
+    #[account(
+        mut,
+        seeds = [PROJECT_SEED.as_bytes()],
+        bump
+    )]
+    pub project: Account<'info, Project>,
+    
+    pub system_program: Program<'info, System>,
+}
